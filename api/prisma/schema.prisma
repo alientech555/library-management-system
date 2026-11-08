@@ -1,0 +1,101 @@
+// This is your Prisma schema file.
+// It is the single source of truth for your database, TypeScript types, and runtime validation.
+// Learn more: https://pris.ly/daily-prisma-tips
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// -----------------------------------------------------------------------------
+// ENUMS
+// -----------------------------------------------------------------------------
+
+/// Roles determine what a user is allowed to do in the system.
+/// Kept as an enum so the database enforces the allowed values at the row level.
+enum Role {
+  PATRON
+  LIBRARIAN
+}
+
+// -----------------------------------------------------------------------------
+// MODELS
+// -----------------------------------------------------------------------------
+
+/// A Genre groups related books (e.g. "Science Fiction", "History").
+/// Genres are standalone entities because many books can share one genre,
+/// and a genre's metadata (name, description) should live in exactly one place.
+model Genre {
+  id          Int    @id @default(autoincrement())
+  name        String @unique
+  description String?
+
+  books Book[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// A User is anyone who interacts with the library system.
+/// The Role enum constrains which roles are valid at the database level.
+model User {
+  id        Int    @id @default(autoincrement())
+  email     String @unique
+  name      String
+  role      Role   @default(PATRON)
+  isActive  Boolean @default(true)
+
+  reviews Review[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// A Book belongs to exactly one Genre via the genreId foreign key.
+/// This is a relational reference (not embedding) — see README "Schema Decisions".
+model Book {
+  id            Int     @id @default(autoincrement())
+  title         String
+  author        String
+  isbn          String  @unique
+  publishedYear Int?
+  pageCount     Int?
+  summary       String?
+
+  /// Foreign key to Genre. The @relation names the back-reference on Genre.books.
+  genreId Int
+  genre   Genre @relation(fields: [genreId], references: [id], onDelete: Restrict)
+
+  reviews Review[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([genreId])
+  @@index([author])
+}
+
+/// (Stretch) A Review links a User to a Book with a rating and optional comment.
+/// This demonstrates a many-to-many relationship resolved through an explicit join model.
+model Review {
+  id      Int     @id @default(autoincrement())
+  rating  Int     // 1–5; enforced in application logic / DTO validation
+  comment String?
+
+  bookId Int
+  book   Book @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  userId Int
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([bookId, userId]) // one review per user per book
+  @@index([bookId])
+  @@index([userId])
+}
